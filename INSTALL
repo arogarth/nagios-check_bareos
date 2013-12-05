@@ -1,0 +1,35 @@
+
+###### INSTALL ######
+
+1. Add Nagios Console configuration
+   Create file /etc/bacula/nagios-console.conf OR /etc/bareos/nagios-console.conf with content of
+
+   Console {
+    Name = nagios
+    Password = "<secret>"
+   }
+   Director {
+     Name = director
+     DIRport = 9101
+     address = 127.0.0.1
+     Password = "<dir-secret>"
+   }
+
+2. Add restricted user to bareos/bacula director.conf
+
+   Console {
+     Name = nagios
+     Password = "<secret>"
+     CatalogACL = MyCatalog
+     CommandACL = status, .status, list
+     JobACL = *all*
+   }
+
+
+3. Copy this script to '/usr/local/nagios/libexec/check_bareos.pl'
+
+4. Add 'check_bareos' command to nrep.cfg
+
+  echo "command[check_bareos]=/usr/local/nagios/libexec/check_bareos.pl $ARG1$" >> /usr/local/nagios/etc/nrpe.cfg
+ 
+5. Now add a nagios nrpe service check with parameter "-j <job-name>"
