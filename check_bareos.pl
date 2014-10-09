@@ -29,6 +29,8 @@ sub print_usage ();
 my $bareosDir = "/etc/bareos";
 my $baculaDir = "/etc/bacula";
 my $workingDir = "";
+my $exitcode = $ERRORS{'OK'};
+
 
 if(-d $bareosDir) {
 	$workingDir = $bareosDir;
@@ -58,8 +60,41 @@ if ($opt_h) {
   exit $ERRORS{'UNKNOWN'};
 }
 
+
+my $cmd_sched = "echo \"status dir days=10\" | bconsole -c ${workingDir}/nagios-console.conf";
+
+# split jobs by line to array
+my @jobs_sched = split('\n', `$cmd_sched`);
+
+my $jobCount_sched = $#jobs_sched;
+
+my @jobRow_sched = ();
+
+my $start_sched = 0;
+
+my $end_sched = 0;
+
+for(my $j=0; $j<$jobCount_sched; $j++) {
+        if($jobs_sched[$j] =~ /Scheduled Jobs:/) {
+                $start_sched=$j+3;
+        }
+        if($jobs_sched[$j] =~ /Running Jobs:/) {
+                $end_sched=$j-3;
+		last;
+        }
+
+}
+
+for(my $k=$start_sched; $k<=$end_sched; $k++) {
+        @jobRow_sched = split(/\s*\ \s*/, $jobs_sched[$k]);
+
+
+#print $jobRow_sched[5];
+
 # Command to fetch jobs
-my $cmd = "echo \"list job=${job}\" | bconsole -c ${workingDir}/nagios-console.conf";
+
+
+my $cmd = "echo \"list job=$jobRow_sched[5]\" | bconsole -c ${workingDir}/nagios-console.conf";
 
 # split jobs by line to array
 my @jobs = split('\n', `$cmd`);
@@ -68,8 +103,8 @@ my $jobCount = $#jobs;
 my @jobRow = ();
 
 # search for last valid job entry from bottom of the table
-for(my $i=$#jobs; $i>0; $i--) {
-        if($jobs[$i] =~ /^\|\s[0-9]/) {
+for(my $i=$jobCount; $i>0; $i--) {
+        if($jobs[$i] =~ /\s*\|\s*/) {
                 @jobRow = split(/\s*\|\s*/, $jobs[$i]);
                 last;
         }
@@ -77,23 +112,45 @@ for(my $i=$#jobs; $i>0; $i--) {
 
 # No job found? exit with unknown state
 if(!@jobRow) {
-        print "UNKNWON: JOB NOT FOUND!\n" . join("\n", @jobs);
-        exit $ERRORS{'UNKNOWN'};
+        print "UNKNOWN: JOB NOT FOUND!\n" . join("\n", @jobs);
+	 if ($exitcode == $ERRORS{'OK'}) {
+		$exitcode = $ERRORS{'UNKNOWN'};
+	}
+#        exit $ERRORS{'UNKNOWN'};
 }
 
 # Field 8 is status-field
 my $jobStatus = $jobRow[8];
 
 if( grep{ /$jobStatus/i } @okStatus ) {
-        print "OK: " .  join(" / ", @jobRow) . "\n";
-        exit $ERRORS{'OK'};
+	print "";
+        # print "OK: " .  $jobRow[2] . " " . $jobRow[3] . " --- ";
+#        exit $ERRORS{'OK'};
 } elsif( grep{ /$jobStatus/i } @warningStatus ) {
-		print "WARNING: " .  join(" / ", @jobRow) . "\n";
-        exit $ERRORS{'WARNING'};
+		print "WARNING: " . $jobRow[2] . " " . $jobRow[3] . " --- ";
+		if (($exitcode == $ERRORS{'OK'}) || ($exitcode == $ERRORS{'UNKNOWN'})) {
+                $exitcode = $ERRORS{'WARNING'};
+		}
+
+#        exit $ERRORS{'WARNING'};
 } else {
-        print "CRITICAL: " .  join(" / ", @jobRow) . "\n";
-        exit $ERRORS{'CRITICAL'};
+        print "CRITICAL: " . $jobRow[2] . " " . $jobRow[3] . " --- ";
+		if (($exitcode == $ERRORS{'OK'}) || ($exitcode == $ERRORS{'UNKNOWN'}) || ($exitcode == $ERRORS{'WARNING'})) {
+		$exitcode = $ERRORS{'CRITICAL'};
+	}
+#        exit $ERRORS{'CRITICAL'};
 }
+
+
+}
+
+if ($exitcode == $ERRORS{'OK'}) {
+
+print "All backups are OK"
+
+}
+
+exit $exitcode;
 
 sub print_usage () {
 	print "Usage: $PROGNAME -j <JobName>\n";
