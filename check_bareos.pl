@@ -59,7 +59,7 @@ if ($opt_h) {
 }
 
 # Command to fetch jobs
-my $cmd = "echo \"list job=${job}\" | bconsole -c ${workingDir}/nagios-console.conf";
+my $cmd = "echo \"list job=\\\"${job}\\\"\" | bconsole -c ${workingDir}/nagios-console.conf";
 
 # split jobs by line to array
 my @jobs = split('\n', `$cmd`);
